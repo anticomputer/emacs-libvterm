@@ -409,62 +409,114 @@ not require any shell-side configuration. See
   :type 'boolean
   :group 'vterm)
 
+(defcustom vterm-copy-mode-remove-fake-newlines nil
+  "When not-nil fake newlines are removed on entering copy mode.
+
+vterm inserts \\='fake\\=' newlines purely for rendering. When using
+vterm-copy-mode these are in conflict with many emacs functions
+like isearch-forward. if this varialbe is not-nil the
+fake-newlines are removed on entering copy-mode and re-inserted
+on leaving copy mode. Also truncate-lines is set to t on entering
+copy-mode and set to nil on leaving."
+  :type 'boolean
+  :group 'vterm)
+
 ;;; Faces
 
 (defface vterm-color-black
   `((t :inherit term-color-black))
-  "Face used to render black color code.
-The foreground color is used as ANSI color 0 and the background
-color is used as ANSI color 8."
+  "Face used to render black color code."
   :group 'vterm)
 
 (defface vterm-color-red
   `((t :inherit term-color-red))
-  "Face used to render red color code.
-The foreground color is used as ANSI color 1 and the background
-color is used as ANSI color 9."
+  "Face used to render red color code."
   :group 'vterm)
 
 (defface vterm-color-green
   `((t :inherit term-color-green))
-  "Face used to render green color code.
-The foreground color is used as ANSI color 2 and the background
-color is used as ANSI color 10."
+  "Face used to render green color code."
   :group 'vterm)
 
 (defface vterm-color-yellow
   `((t :inherit term-color-yellow))
-  "Face used to render yellow color code.
-The foreground color is used as ANSI color 3 and the background
-color is used as ANSI color 11."
+  "Face used to render yellow color code."
   :group 'vterm)
 
 (defface vterm-color-blue
   `((t :inherit term-color-blue))
-  "Face used to render blue color code.
-The foreground color is used as ANSI color 4 and the background
-color is used as ANSI color 12."
+  "Face used to render blue color code."
   :group 'vterm)
 
 (defface vterm-color-magenta
   `((t :inherit term-color-magenta))
-  "Face used to render magenta color code.
-The foreground color is used as ansi color 5 and the background
-color is used as ansi color 13."
+  "Face used to render magenta color code."
   :group 'vterm)
 
 (defface vterm-color-cyan
   `((t :inherit term-color-cyan))
-  "Face used to render cyan color code.
-The foreground color is used as ansi color 6 and the background
-color is used as ansi color 14."
+  "Face used to render cyan color code."
   :group 'vterm)
 
 (defface vterm-color-white
   `((t :inherit term-color-white))
-  "Face used to render white color code.
-The foreground color is used as ansi color 7 and the background
-color is used as ansi color 15."
+  "Face used to render white color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-black
+  `((t :inherit ,(if (facep 'term-color-bright-black)
+                     'term-color-bright-black
+                   'term-color-black)))
+  "Face used to render bright black color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-red
+  `((t :inherit ,(if (facep 'term-color-bright-red)
+                     'term-color-bright-red
+                   'term-color-red)))
+  "Face used to render bright red color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-green
+  `((t :inherit ,(if (facep 'term-color-bright-green)
+                     'term-color-bright-green
+                   'term-color-green)))
+  "Face used to render bright green color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-yellow
+  `((t :inherit ,(if (facep 'term-color-bright-yellow)
+                     'term-color-bright-yellow
+                   'term-color-yellow)))
+  "Face used to render bright yellow color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-blue
+  `((t :inherit ,(if (facep 'term-color-bright-blue)
+                     'term-color-bright-blue
+                   'term-color-blue)))
+  "Face used to render bright blue color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-magenta
+  `((t :inherit ,(if (facep 'term-color-bright-magenta)
+                     'term-color-bright-magenta
+                   'term-color-magenta)))
+  "Face used to render bright magenta color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-cyan
+  `((t :inherit ,(if (facep 'term-color-bright-cyan)
+                     'term-color-bright-cyan
+                   'term-color-cyan)))
+  "Face used to render bright cyan color code."
+  :group 'vterm)
+
+(defface vterm-color-bright-white
+  `((t :inherit ,(if (facep 'term-color-bright-white)
+                     'term-color-bright-white
+                   'term-color-white)))
+  "Face used to render bright white color code."
   :group 'vterm)
 
 (defface vterm-color-underline
@@ -489,7 +541,15 @@ Only background is used."
    vterm-color-blue
    vterm-color-magenta
    vterm-color-cyan
-   vterm-color-white]
+   vterm-color-white
+   vterm-color-bright-black
+   vterm-color-bright-red
+   vterm-color-bright-green
+   vterm-color-bright-yellow
+   vterm-color-bright-blue
+   vterm-color-bright-magenta
+   vterm-color-bright-cyan
+   vterm-color-bright-white]
   "Color palette for the foreground and background.")
 
 (defvar-local vterm--term nil
@@ -506,6 +566,8 @@ Only background is used."
 (defvar-local vterm--delete-char-function (symbol-function #'delete-char))
 (defvar-local vterm--delete-region-function (symbol-function #'delete-region))
 (defvar-local vterm--undecoded-bytes nil)
+(defvar-local vterm--copy-mode-fake-newlines nil)
+
 
 (defvar vterm-timer-delay 0.1
   "Delay for refreshing the buffer after receiving updates from libvterm.
@@ -628,6 +690,7 @@ Exceptions are defined by `vterm-keymap-exceptions'."
     (define-key map [remap xterm-paste]         #'vterm-xterm-paste)
     (define-key map [remap yank-pop]            #'vterm-yank-pop)
     (define-key map [remap mouse-yank-primary]  #'vterm-yank-primary)
+    (define-key map [mouse-1]                   #'vterm-mouse-set-point)
     (define-key map (kbd "C-SPC")               #'vterm--self-insert)
     (define-key map (kbd "S-SPC")               #'vterm-send-space)
     (define-key map (kbd "C-_")                 #'vterm--self-insert)
@@ -670,6 +733,11 @@ Exceptions are defined by `vterm-keymap-exceptions'."
        (let ((font-height (expt text-scale-mode-step text-scale-mode-amount)))
          (setq vterm--linenum-remapping
                (face-remap-add-relative 'line-number :height font-height))))
+  (hack-dir-local-variables)
+  (let ((vterm-env (assq 'vterm-environment dir-local-variables-alist)))
+    (when vterm-env
+      (make-local-variable 'vterm-environment)
+      (setq vterm-environment (cdr vterm-env))))
   (let ((process-environment (append vterm-environment
                                      `(,(concat "TERM="
                                                 vterm-term-environment-variable)
@@ -683,7 +751,7 @@ Exceptions are defined by `vterm-keymap-exceptions'."
         (inhibit-eol-conversion nil)
         (coding-system-for-read 'binary)
         (process-adaptive-read-buffering nil)
-        (width (max (- (window-body-width) (vterm--get-margin-width))
+        (width (max (- (window-max-chars-per-line) (vterm--get-margin-width))
                     vterm-min-window-width)))
     (setq vterm--term (vterm--new (window-body-height)
                                   width vterm-max-scrollback
@@ -755,6 +823,7 @@ Exceptions are defined by `vterm-keymap-exceptions'."
   (if (ignore-errors (file-remote-p default-directory))
       (with-parsed-tramp-file-name default-directory nil
         (or (cadr (assoc method vterm-tramp-shells))
+            (with-connection-local-variables shell-file-name)
             vterm-shell))
     vterm-shell))
 
@@ -827,6 +896,24 @@ Optional argument RESET clears all the errors."
 
 ;;; Copy Mode
 
+(defun vterm--enter-copy-mode ()
+  (use-local-map nil)
+  (vterm-send-stop)
+  (when vterm-copy-mode-remove-fake-newlines
+    (save-excursion
+      (setq truncate-lines nil)
+      (vterm--remove-fake-newlines t))))
+
+
+(defun vterm--exit-copy-mode ()
+  (when vterm-copy-mode-remove-fake-newlines
+    (save-excursion
+      (setq truncate-lines t)
+      (vterm--reinsert-fake-newlines)))
+  (vterm-reset-cursor-point)
+  (use-local-map vterm-mode-map)
+  (vterm-send-start))
+
 (define-minor-mode vterm-copy-mode
   "Toggle `vterm-copy-mode'.
 
@@ -843,12 +930,8 @@ A conventient way to exit `vterm-copy-mode' is with
   :keymap vterm-copy-mode-map
   (if (equal major-mode 'vterm-mode)
       (if vterm-copy-mode
-          (progn                            ;enable vterm-copy-mode
-            (use-local-map nil)
-            (vterm-send-stop))
-        (vterm-reset-cursor-point)
-        (use-local-map vterm-mode-map)
-        (vterm-send-start))
+          (vterm--enter-copy-mode)
+        (vterm--exit-copy-mode))
     (user-error "You cannot enable vterm-copy-mode outside vterm buffers")))
 
 (defun vterm-copy-mode-done (arg)
@@ -1077,6 +1160,18 @@ Argument ARG is passed to `yank'"
         (yank-undo-function #'(lambda (_start _end) (vterm-undo))))
     (cl-letf (((symbol-function 'insert-for-yank) #'vterm-insert))
       (yank-pop arg))))
+
+(defun vterm-mouse-set-point (event &optional promote-to-region)
+  "Move point to the position clicked on with the mouse.
+But when clicking to the unused area below the last prompt,
+move the cursor to the prompt area."
+  (interactive "e\np")
+  (let ((pt (mouse-set-point event promote-to-region)))
+    (if (= (count-words pt (point-max)) 0)
+        (vterm-reset-cursor-point)
+      pt))
+  ;; Otherwise it selects text for every other click
+  (keyboard-quit))
 
 (defun vterm-send-string (string &optional paste-p)
   "Send the string STRING to vterm.
@@ -1559,29 +1654,27 @@ If N is negative backward-line from end of buffer."
       (when raw-pwd
         (vterm--get-directory raw-pwd)))))
 
-(defun vterm--get-color (index)
-  "Get color by index from `vterm-color-palette'.
-Argument INDEX index of the terminal color.
-Special values for INDEX are:
--11 foreground for cells with underline attribute, foreground of
-the `vterm-color-underline' face is used in this case.
--12 background for cells with inverse video attribute, background
-of the `vterm-color-inverse-video' face is used in this case."
-  (cond
-   ((and (>= index 0) (< index 8))
-    (face-foreground
-     (elt vterm-color-palette index)
-     nil 'default))
-   ((and (>= index 8) (< index 16))
-    (face-background
-     (elt vterm-color-palette (% index 8))
-     nil 'default))
-   ((= index -11)
-    (face-foreground 'vterm-color-underline nil 'default))
-   ((= index -12)
-    (face-background 'vterm-color-inverse-video nil 'default))
-   (t
-    nil)))
+(defun vterm--get-color (index &rest args)
+  "Get color by INDEX from `vterm-color-palette'.
+
+Special INDEX of -1 is used to represent default colors.  ARGS
+may optionally contain `:underline' or `:inverse-video' for cells
+with underline or inverse video attribute.  If ARGS contains
+`:foreground', use foreground color of the respective face
+instead of background."
+  (let ((foreground    (member :foreground args))
+        (underline     (member :underline args))
+        (inverse-video (member :inverse-video args)))
+    (funcall (if foreground #'face-foreground #'face-background)
+             (cond
+              ((and (>= index 0) (< index 16))
+               (elt vterm-color-palette index))
+              ((and (= index -1) foreground underline)
+               'vterm-color-underline)
+              ((and (= index -1) (not foreground) inverse-video)
+               'vterm-color-inverse-video)
+              (t 'default))
+             nil 'default)))
 
 (defun vterm--eval (str)
   "Check if string STR is `vterm-eval-cmds' and execute command.
@@ -1645,9 +1738,12 @@ in README."
                    (when pt (goto-char (1- pt))))))
     (term-previous-prompt n)))
 
-(defun vterm--get-beginning-of-line ()
-  "Find the start of the line, bypassing line wraps."
+(defun vterm--get-beginning-of-line (&optional pt)
+  "Find the start of the line, bypassing line wraps.
+If PT is specified, find it's beginning of the line instead of the beginning
+of the line at cursor."
   (save-excursion
+    (when pt (goto-char pt))
     (beginning-of-line)
     (while (and (not (bobp))
                 (get-text-property (1- (point)) 'vterm-line-wrap))
@@ -1655,9 +1751,12 @@ in README."
       (beginning-of-line))
     (point)))
 
-(defun vterm--get-end-of-line ()
-  "Find the start of the line, bypassing line wraps."
+(defun vterm--get-end-of-line (&optional pt)
+  "Find the start of the line, bypassing line wraps.
+If PT is specified, find it's end of the line instead of the end
+of the line at cursor."
   (save-excursion
+    (when pt (goto-char pt))
     (end-of-line)
     (while (get-text-property (point) 'vterm-line-wrap)
       (forward-char)
@@ -1702,7 +1801,7 @@ More information see `vterm--prompt-tracking-enabled-p' and
 Move the point to the first character after the shell prompt on this line.
 If the point is already there, move to the beginning of the line.
 Effectively toggle between the two positions."
-  (interactive)
+  (interactive "^")
   (if (vterm--at-prompt-p)
       (goto-char (vterm--get-beginning-of-line))
     (goto-char (max (or (vterm--get-prompt-point) 0)
@@ -1710,7 +1809,7 @@ Effectively toggle between the two positions."
 
 (defun vterm-end-of-line ()
   "Move point to the end of the line, bypassing line wraps."
-  (interactive)
+  (interactive "^")
   (goto-char (vterm--get-end-of-line)))
 
 (defun vterm-reset-cursor-point ()
@@ -1726,26 +1825,58 @@ Effectively toggle between the two positions."
     (save-excursion
       (vterm-reset-cursor-point))))
 
-(defun vterm--remove-fake-newlines ()
+(defun vterm--reinsert-fake-newlines ()
+  "Reinsert fake newline from `vterm--copy-mode-fake-newlines'."
+  (let ((inhibit-read-only t)
+        (inhibit-redisplay t)
+        (fake-newline-text "\n")
+        fake-newline-pos)
+    (add-text-properties 0 1 '(vterm-line-wrap t rear-nonsticky t)
+                         fake-newline-text)
+    (while vterm--copy-mode-fake-newlines
+      (setq fake-newline-pos (car vterm--copy-mode-fake-newlines))
+      (setq vterm--copy-mode-fake-newlines (cdr vterm--copy-mode-fake-newlines))
+      (goto-char fake-newline-pos)
+      (insert fake-newline-text))))
+
+(defun vterm--remove-fake-newlines (&optional remembering-pos-p)
   "Filter out injected newlines were injected when rendering the terminal.
 
 These newlines were tagged with \\='vterm-line-wrap property so we
-can find them and remove them."
-  (goto-char (point-min))
-  (let (fake-newline)
-    (while (setq fake-newline (next-single-property-change (point)
-                                                           'vterm-line-wrap))
-      (goto-char fake-newline)
-      (cl-assert (eq ?\n (char-after)))
-      (let ((inhibit-read-only t))
-        (vterm--delete-char 1)))))
+can find them and remove them.
+If REMEMBERING-POS-P is not nil remembering their positions in a buffer-local
+`vterm--copy-mode-fake-newlines'."
+  (let (fake-newline
+        (inhibit-read-only t)
+        (inhibit-redisplay t))
+    (when remembering-pos-p
+      (setq vterm--copy-mode-fake-newlines nil))
 
+    (goto-char (point-max))
+    (when (and (bolp)
+               (not (bobp))
+               (get-text-property (1- (point)) 'vterm-line-wrap))
+      (forward-char -1)
+      (when remembering-pos-p
+        (setq vterm--copy-mode-fake-newlines
+              (cons (point) vterm--copy-mode-fake-newlines)))
+      (vterm--delete-char 1))
+
+    (while (and (not (bobp))
+                (setq fake-newline (previous-single-property-change
+                                    (point) 'vterm-line-wrap)))
+      (goto-char (1- fake-newline))
+      (cl-assert (eq ?\n (char-after)))
+      (when remembering-pos-p
+        (setq vterm--copy-mode-fake-newlines
+              (cons (point) vterm--copy-mode-fake-newlines)))
+      (vterm--delete-char 1))))
 
 (defun vterm--filter-buffer-substring (content)
   "Filter string CONTENT of fake/injected newlines."
   (with-temp-buffer
     (vterm--insert content)
-    (vterm--remove-fake-newlines)
+    (vterm--remove-fake-newlines nil)
     (buffer-string)))
 
 
